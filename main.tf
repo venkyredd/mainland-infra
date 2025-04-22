@@ -3,7 +3,7 @@ provider "aws" {
 }
 
 resource "aws_s3_bucket" "website_bucket" {
-  bucket = "mainland-static-site-bucket"
+  bucket = "v-mainland-static-site-bucket"
   force_destroy = true
 
   tags = {
