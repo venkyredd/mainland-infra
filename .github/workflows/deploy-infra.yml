@@ -1,26 +1,87 @@
-name: Deploy Infrastructure
+provider "aws" {
+  region = "us-east-2"
+}
 
-on:
-  workflow_dispatch:  # You can also use push or PR
+resource "aws_s3_bucket" "website_bucket" {
+  bucket = "mainland-static-site-bucket"
+  force_destroy = true
 
-jobs:
-  terraform:
-    runs-on: ubuntu-latest
+  tags = {
+    Name = "V-Mainland-S3"
+  }
+}
 
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v3
+resource "aws_s3_bucket_website_configuration" "website_config" {
+  bucket = aws_s3_bucket.website_bucket.id
 
-      - name: Setup Terraform
-        uses: hashicorp/setup-terraform@v2
+  index_document {
+    suffix = "index.html"
+  }
 
-      - name: Terraform Init
-        run: terraform init
+  error_document {
+    key = "error.html"
+  }
+}
 
-      - name: Terraform Apply
-        run: terraform apply -auto-approve
+resource "aws_s3_bucket_public_access_block" "public_access" {
+  bucket = aws_s3_bucket.website_bucket.id
 
-        env:
-          AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
-          AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-          AWS_REGION: us-east-2
+  block_public_acls       = false
+  block_public_policy     = false
+  ignore_public_acls      = false
+  restrict_public_buckets = false
+}
+
+resource "aws_s3_bucket_policy" "allow_public_access" {
+  bucket = aws_s3_bucket.website_bucket.id
+
+  policy = jsonencode({
+    Version = "2012-10-17",
+    Statement = [
+      {
+        Effect = "Allow",
+        Principal = "*",
+        Action = ["s3:GetObject"],
+        Resource = "${aws_s3_bucket.website_bucket.arn}/*"
+      }
+    ]
+  })
+}
+
+resource "aws_cloudfront_distribution" "cdn" {
+  origin {
+    domain_name = "${aws_s3_bucket.website_bucket.bucket}.s3-website-us-east-1.amazonaws.com"
+    origin_id   = "s3Origin"
+  }
+
+  enabled             = true
+  default_root_object = "index.html"
+
+  default_cache_behavior {
+    allowed_methods        = ["GET", "HEAD"]
+    cached_methods         = ["GET", "HEAD"]
+    target_origin_id       = "s3Origin"
+    viewer_protocol_policy = "redirect-to-https"
+
+    forwarded_values {
+      query_string = false
+      cookies {
+        forward = "none"
+      }
+    }
+  }
+
+  restrictions {
+    geo_restriction {
+      restriction_type = "none"
+    }
+  }
+
+  viewer_certificate {
+    cloudfront_default_certificate = true
+  }
+
+  tags = {
+    Name = "V-Mainland-CDN"
+  }
+}
