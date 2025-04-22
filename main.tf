@@ -3,7 +3,7 @@ provider "aws" {
 }
 
 resource "aws_s3_bucket" "website_bucket" {
-  bucket = "v-mainland-static-site-bucket"
+  bucket = "mainland-static-site-bucket"
   force_destroy = true
 
   tags = {
@@ -27,7 +27,7 @@ resource "aws_s3_bucket_public_access_block" "public_access" {
   bucket = aws_s3_bucket.website_bucket.id
 
   block_public_acls       = false
-  block_public_policy     = false  # Updated to allow public policy
+  block_public_policy     = false
   ignore_public_acls      = false
   restrict_public_buckets = false
 }
@@ -48,9 +48,11 @@ resource "aws_s3_bucket_policy" "allow_public_access" {
   })
 }
 
+data "aws_region" "current" {}
+
 resource "aws_cloudfront_distribution" "cdn" {
   origin {
-    domain_name = "${aws_s3_bucket.website_bucket.bucket}.s3-website-us-east-1.amazonaws.com"  # Corrected the domain name
+    domain_name = "${aws_s3_bucket.website_bucket.bucket}.s3-website.${data.aws_region.current.name}.amazonaws.com"  # Fixed domain name format
     origin_id   = "s3Origin"
   }
 
